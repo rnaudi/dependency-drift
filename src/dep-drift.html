@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dependency Drift</title>
+
+<style>
+/* ═══════════════════════════════════════════════════════
+   Layer structure
+   ═══════════════════════════════════════════════════════ */
+@layer reset, base, components, utilities;
+
+/* ═══════════════════════════════════════════════════════
+   Animatable custom properties
+   ═══════════════════════════════════════════════════════ */
+@property --row-highlight {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Reset
+   ═══════════════════════════════════════════════════════ */
+@layer reset {
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Base — Primer design tokens with light-dark()
+   ═══════════════════════════════════════════════════════ */
+@layer base {
+  :root {
+    color-scheme: dark light;
+
+    /* Canvas */
+    --color-canvas-default: light-dark(#ffffff, #0d1117);
+    --color-canvas-subtle:  light-dark(#f6f8fa, #161b22);
+    --color-canvas-inset:   light-dark(#eff2f5, #010409);
+
+    /* Borders */
+    --color-border-default: light-dark(#d0d7de, #30363d);
+    --color-border-muted:   light-dark(#d8dee4, #21262d);
+
+    /* Foreground */
+    --color-fg-default:     light-dark(#1f2328, #e6edf3);
+    --color-fg-muted:       light-dark(#656d76, #8b949e);
+    --color-fg-subtle:      light-dark(#6e7781, #484f58);
+
+    /* Accent */
+    --color-accent-fg:      light-dark(#0969da, #58a6ff);
+
+    /* Semantic: success / danger / attention / done */
+    --color-success-fg:     light-dark(#1a7f37, #3fb950);
+    --color-success-subtle: light-dark(#dafbe1, #0d2818);
+    --color-danger-fg:      light-dark(#cf222e, #f85149);
+    --color-danger-subtle:  light-dark(#ffebe9, #2d1013);
+    --color-attention-fg:   light-dark(#9a6700, #d29922);
+    --color-attention-subtle: light-dark(#fff8c5, #2b2213);
+    --color-done-fg:        light-dark(#8250df, #a371f7);
+    --color-done-subtle:    light-dark(#fbefff, #271044);
+
+    /* Mono font */
+    --font-mono: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+
+    /* Spacing scale */
+    --space-2xs: 0.125rem;
+    --space-xs:  0.25rem;
+    --space-sm:  0.5rem;
+    --space-md:  1rem;
+    --space-lg:  1.5rem;
+    --space-xl:  2.5rem;
+
+    /* Easing */
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+    scrollbar-color: light-dark(#d0d7de, #30363d) transparent;
+    scrollbar-width: thin;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    background: var(--color-canvas-default);
+    color: var(--color-fg-default);
+    -webkit-font-smoothing: antialiased;
+    min-block-size: 100dvh;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Components
+   ═══════════════════════════════════════════════════════ */
+@layer components {
+
+  /* ── Container ──────────────────────────────────── */
+  .container {
+    max-inline-size: 1400px;
+    margin-inline: auto;
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  /* ── Header ─────────────────────────────────────── */
+  .header {
+    border-block-end: 1px solid var(--color-border-default);
+    padding-block: var(--space-md);
+    margin-block-end: var(--space-md);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    text-wrap: balance;
+  }
+
+  .header h1 .brand {
+    color: var(--color-fg-muted);
+    font-weight: 400;
+  }
+
+  .header .controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  /* ── Theme toggle ───────────────────────────────── */
+  .theme-toggle {
+    background: none;
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--color-fg-muted);
+    font-size: 0.8rem;
+    transition: background 0.15s;
+  }
+
+  .theme-toggle:hover {
+    background: var(--color-canvas-subtle);
+  }
+
+  /* ── Compare bar ────────────────────────────────── */
+  .compare-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm) var(--space-md);
+    padding: 0.75rem var(--space-md);
+    margin-block-end: var(--space-md);
+    background: var(--color-canvas-subtle);
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    font-size: 0.85rem;
+  }
+
+  .compare-bar__label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-inline-end: var(--space-xs);
+  }
+
+  .compare-bar__select-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: 0.85rem;
+    color: var(--color-fg-muted);
+  }
+
+  .compare-select {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-fg-default);
+    background: var(--color-canvas-default);
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .compare-select:focus {
+    border-color: var(--color-accent-fg);
+  }
+
+  .compare-bar__arrow {
+    color: var(--color-fg-subtle);
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .compare-bar__reset {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-fg-muted);
+    background: none;
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    margin-inline-start: auto;
+  }
+
+  .compare-bar__reset:hover {
+    color: var(--color-fg-default);
+    background: var(--color-canvas-subtle);
+  }
+
+  .compare-bar__reset[hidden] { display: none; }
+
+  /* ── Diff summary panel ─────────────────────────── */
+  .diff-summary {
+    padding: 0.75rem var(--space-md);
+    margin-block-end: var(--space-md);
+    background: var(--color-canvas-subtle);
+    border: 1px solid var(--color-border-default);
+    border-inline-start: 3px solid var(--color-attention-fg);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--color-fg-muted);
+  }
+
+  .diff-summary[hidden] { display: none; }
+
+  .diff-summary__heading {
+    font-weight: 600;
+    color: var(--color-fg-default);
+    margin-block-end: var(--space-xs);
+  }
+
+  .diff-summary__line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm) var(--space-md);
+  }
+
+  .diff-summary__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 6px;
+  }
+
+  .diff-summary__chip--major  { color: var(--color-danger-fg);    background: var(--color-danger-subtle); }
+  .diff-summary__chip--minor  { color: var(--color-attention-fg); background: var(--color-attention-subtle); }
+  .diff-summary__chip--patch  { color: var(--color-fg-muted);     background: var(--color-canvas-inset); }
+  .diff-summary__chip--added  { color: var(--color-success-fg);   background: var(--color-success-subtle); }
+  .diff-summary__chip--removed{ color: var(--color-danger-fg);    background: var(--color-danger-subtle); }
+
+  .diff-summary__names {
+    font-weight: 400;
+    font-style: italic;
+    font-size: 0.78rem;
+    color: var(--color-fg-subtle);
+    margin-inline-start: var(--space-2xs);
+  }
+
+  /* ── Controls bar ───────────────────────────────── */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem var(--space-lg);
+    margin-block-end: var(--space-md);
+  }
+
+  .search-wrapper {
+    position: relative;
+    flex: 1 1 220px;
+    max-inline-size: 320px;
+  }
+
+  .search-wrapper__icon {
+    position: absolute;
+    inset-inline-start: var(--space-sm);
+    inset-block-start: 50%;
+    translate: 0 -50%;
+    color: var(--color-fg-subtle);
+    pointer-events: none;
+    inline-size: 16px;
+    block-size: 16px;
+  }
+
+  .search-input {
+    inline-size: 100%;
+    padding: 4px var(--space-sm) 4px calc(var(--space-sm) + 22px);
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: var(--color-fg-default);
+    background: var(--color-canvas-default);
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  @supports (field-sizing: content) {
+    .search-input { field-sizing: content; min-inline-size: 220px; }
+  }
+
+  .search-input:focus {
+    border-color: var(--color-accent-fg);
+  }
+
+  .search-input::placeholder { color: var(--color-fg-subtle); }
+
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.82rem;
+    color: var(--color-fg-muted);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .toggle-checkbox {
+    appearance: none;
+    inline-size: 16px;
+    block-size: 16px;
+    border: 1px solid var(--color-border-default);
+    border-radius: 3px;
+    background: var(--color-canvas-default);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .toggle-checkbox:checked {
+    background: var(--color-accent-fg);
+    border-color: var(--color-accent-fg);
+  }
+
+  .toggle-checkbox:checked::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 4px;
+    inset-block-start: 1px;
+    inline-size: 5px;
+    block-size: 9px;
+    border: solid var(--color-canvas-default);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .toggle-checkbox:focus-visible {
+    box-shadow: 0 0 0 2px var(--color-accent-fg);
+  }
+
+  /* Sort select */
+  .sort-wrapper {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: 0.82rem;
+    color: var(--color-fg-muted);
+    margin-inline-start: auto;
+  }
+
+  .sort-select {
+    font-family: inherit;
+    font-size: 0.82rem;
+    color: var(--color-fg-default);
+    background: var(--color-canvas-default);
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    padding: 4px var(--space-sm);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .sort-select:focus { border-color: var(--color-accent-fg); }
+
+  /* ── Legend ──────────────────────────────────────── */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs) var(--space-md);
+    margin-block-end: var(--space-md);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+  }
+
+  .legend__item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+
+  .legend__swatch {
+    inline-size: 10px;
+    block-size: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  .legend__swatch--major   { background: var(--color-danger-fg); }
+  .legend__swatch--minor   { background: var(--color-attention-fg); }
+  .legend__swatch--patch   { background: var(--color-fg-subtle); }
+  .legend__swatch--added   { background: var(--color-success-fg); }
+  .legend__swatch--removed { background: var(--color-danger-fg); opacity: 0.6; }
+
+  /* ── Table container ────────────────────────────── */
+  .table-container {
+    container: drift-table / inline-size;
+    overflow-x: auto;
+    overflow-y: visible;
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    background: var(--color-canvas-default);
+  }
+
+  /* ── Table ──────────────────────────────────────── */
+  .drift-table {
+    inline-size: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.85rem;
+  }
+
+  .drift-table th,
+  .drift-table td {
+    padding: var(--space-sm) var(--space-md);
+    text-align: start;
+    white-space: nowrap;
+    border-block-end: 1px solid var(--color-border-muted);
+  }
+
+  /* Hide columns when comparing */
+  .drift-table th.col--hidden,
+  .drift-table td.col--hidden {
+    display: none;
+  }
+
+  /* Sticky dep-name column */
+  .drift-table th:first-child,
+  .drift-table td:first-child {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 2;
+    background: var(--color-canvas-default);
+    border-inline-end: 1px solid var(--color-border-default);
+    min-inline-size: 170px;
+    max-inline-size: 230px;
+  }
+
+  /* Staleness column — last col */
+  .drift-table th:last-child,
+  .drift-table td:last-child {
+    min-inline-size: 130px;
+    border-inline-start: 1px solid var(--color-border-default);
+  }
+
+  /* ── Header rows ────────────────────────────────── */
+  .drift-table thead th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 3;
+    background: var(--color-canvas-subtle);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--color-fg-muted);
+    letter-spacing: 0.02em;
+    padding-block: var(--space-sm);
+    vertical-align: bottom;
+  }
+
+  /* Column summary sub-line */
+  .col-summary {
+    display: block;
+    font-weight: 400;
+    font-size: 0.68rem;
+    color: var(--color-fg-subtle);
+    letter-spacing: 0;
+    margin-block-start: 2px;
+    line-height: 1.3;
+  }
+
+  .col-summary__major { color: var(--color-danger-fg); }
+  .col-summary__minor { color: var(--color-attention-fg); }
+  .col-summary__added { color: var(--color-success-fg); }
+  .col-summary__removed { color: var(--color-danger-fg); opacity: 0.7; }
+
+  /* Top-left corner */
+  .drift-table thead th:first-child {
+    z-index: 4;
+    background: var(--color-canvas-subtle);
+    font-family: inherit;
+    font-weight: 600;
+    color: var(--color-fg-default);
+    letter-spacing: normal;
+    font-size: 0.82rem;
+  }
+
+  /* Top-right (staleness header) */
+  .drift-table thead th:last-child {
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: normal;
+  }
+
+  /* Separator between tag headers and body */
+  .drift-table thead tr:last-child th {
+    border-block-end: 1px solid var(--color-border-default);
+  }
+
+  /* ── Body rows ──────────────────────────────────── */
+  .drift-table tbody tr {
+    --row-highlight: 0;
+    transition: --row-highlight 0.2s var(--ease-out-expo);
+    cursor: pointer;
+  }
+
+  .drift-table tbody tr:last-child td {
+    border-block-end: none;
+  }
+
+  .drift-table tbody tr:hover {
+    --row-highlight: 1;
+  }
+
+  .drift-table tbody tr td {
+    background-color: color-mix(
+      in srgb,
+      var(--color-canvas-subtle) calc(var(--row-highlight) * 100%),
+      transparent
+    );
+  }
+
+  .drift-table tbody tr:hover td:first-child {
+    background: var(--color-canvas-subtle);
+  }
+
+  .drift-table tbody tr.row--selected td,
+  .drift-table tbody tr.row--selected td:first-child {
+    background: var(--color-done-subtle);
+  }
+
+  .drift-table tbody tr.row--hidden {
+    display: none;
+  }
+
+  /* ── Dep name cell ──────────────────────────────── */
+  .dep-name {
+    font-weight: 500;
+    color: var(--color-fg-default);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dep-name__category {
+    font-size: 0.68rem;
+    font-weight: 400;
+    color: var(--color-fg-subtle);
+    display: block;
+    margin-block-start: 1px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Version cells ──────────────────────────────── */
+  .version-cell {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--color-fg-subtle);
+    position: relative;
+  }
+
+  /* State: absent */
+  .version-cell--absent {
+    color: var(--color-fg-subtle);
+    opacity: 0.3;
+    font-style: italic;
+  }
+
+  /* State: unchanged */
+  .version-cell--unchanged {
+    color: var(--color-fg-subtle);
+  }
+
+  /* State: added */
+  .version-cell--added {
+    color: var(--color-success-fg);
+    font-weight: 500;
+  }
+
+  .version-cell--added::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 3px;
+    background: var(--color-success-subtle);
+    z-index: -1;
+  }
+
+  /* State: removed */
+  .version-cell--removed {
+    color: var(--color-danger-fg);
+    font-weight: 500;
+  }
+
+  .version-cell--removed::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 3px;
+    background: var(--color-danger-subtle);
+    z-index: -1;
+  }
+
+  /* Severity: major bump */
+  .version-cell--major {
+    color: var(--color-danger-fg);
+    font-weight: 600;
+  }
+
+  .version-cell--major::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 3px;
+    background: var(--color-danger-subtle);
+    z-index: -1;
+  }
+
+  /* Severity: minor bump */
+  .version-cell--minor {
+    color: var(--color-attention-fg);
+    font-weight: 500;
+  }
+
+  .version-cell--minor::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 3px;
+    background: var(--color-attention-subtle);
+    z-index: -1;
+  }
+
+  /* Severity: patch bump */
+  .version-cell--patch {
+    color: var(--color-fg-muted);
+    font-weight: 500;
+  }
+
+  .version-cell--patch::before {
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border-radius: 3px;
+    background: var(--color-canvas-subtle);
+    z-index: -1;
+  }
+
+  /* Severity badge */
+  .severity-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0 3px;
+    border-radius: 3px;
+    margin-inline-start: var(--space-2xs);
+    vertical-align: middle;
+    line-height: 1.5;
+  }
+
+  .severity-badge--major {
+    color: var(--color-danger-fg);
+    background: var(--color-danger-subtle);
+  }
+
+  .severity-badge--minor {
+    color: var(--color-attention-fg);
+    background: var(--color-attention-subtle);
+  }
+
+  /* Changelog link */
+  .changelog-link {
+    display: inline-flex;
+    align-items: center;
+    margin-inline-start: var(--space-2xs);
+    color: var(--color-fg-subtle);
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    vertical-align: middle;
+  }
+
+  .changelog-link svg {
+    inline-size: 11px;
+    block-size: 11px;
+  }
+
+  .version-cell:hover .changelog-link,
+  .drift-table tbody tr:hover .changelog-link {
+    opacity: 0.6;
+  }
+
+  .changelog-link:hover {
+    opacity: 1 !important;
+    color: var(--color-fg-default);
+  }
+
+  /* Tooltip */
+  .cell-tooltip {
+    position: absolute;
+    inset-block-end: calc(100% + 6px);
+    inset-inline-start: 50%;
+    translate: -50% 0;
+    background: var(--color-fg-default);
+    color: var(--color-canvas-default);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 400;
+    padding: var(--space-2xs) var(--space-sm);
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    scale: 0.95;
+    transition: opacity 0.12s, scale 0.12s;
+    z-index: 10;
+  }
+
+  .cell-tooltip::after {
+    content: "";
+    position: absolute;
+    inset-block-start: 100%;
+    inset-inline-start: 50%;
+    translate: -50% 0;
+    border: 4px solid transparent;
+    border-block-start-color: var(--color-fg-default);
+  }
+
+  .version-cell:hover .cell-tooltip {
+    opacity: 1;
+    scale: 1;
+  }
+
+  /* ── Staleness cell ─────────────────────────────── */
+  .staleness-cell {
+    font-size: 0.78rem;
+    color: var(--color-fg-subtle);
+  }
+
+  .staleness-cell__tag {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+  }
+
+  .staleness-cell__count {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--color-fg-subtle);
+    margin-block-start: 1px;
+  }
+
+  .staleness-cell--stale {
+    color: var(--color-danger-fg);
+  }
+
+  .staleness-cell--stale .staleness-cell__count {
+    color: var(--color-danger-fg);
+    opacity: 0.8;
+  }
+
+  .staleness-cell--fresh .staleness-cell__tag {
+    color: var(--color-success-fg);
+  }
+
+  /* ── Summary footer ─────────────────────────────── */
+  .summary {
+    margin-block-start: var(--space-lg);
+    padding-block-start: var(--space-md);
+    border-block-start: 1px solid var(--color-border-default);
+    font-size: 0.8rem;
+    color: var(--color-fg-subtle);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  }
+
+  .summary__item {
+    white-space: nowrap;
+  }
+
+  .summary__item + .summary__item::before {
+    content: "\00b7";
+    margin-inline-end: var(--space-xs);
+    color: var(--color-fg-subtle);
+  }
+
+  .summary__count {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-fg-muted);
+  }
+
+  /* ── No-results ─────────────────────────────────── */
+  .no-results {
+    text-align: center;
+    color: var(--color-fg-subtle);
+    font-style: italic;
+    font-size: 0.88rem;
+  }
+
+  .no-results td {
+    padding: var(--space-xl) var(--space-lg) !important;
+  }
+
+  .no-results[hidden] { display: none; }
+
+  /* ── Keyboard hint ──────────────────────────────── */
+  .kbd-hint {
+    position: fixed;
+    inset-block-end: var(--space-md);
+    inset-inline-end: var(--space-md);
+    padding: 4px 10px;
+    background: var(--color-canvas-subtle);
+    border: 1px solid var(--color-border-default);
+    border-radius: 6px;
+    font-size: 0.7rem;
+    color: var(--color-fg-subtle);
+    opacity: 0.7;
+  }
+
+  kbd {
+    background: var(--color-canvas-inset);
+    border: 1px solid var(--color-border-default);
+    border-radius: 3px;
+    padding: 0 4px;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+  }
+
+  /* ── Container query ────────────────────────────── */
+  @container drift-table (width < 600px) {
+    .drift-table th, .drift-table td {
+      padding: var(--space-xs) var(--space-sm);
+      font-size: 0.76rem;
+    }
+    .drift-table th:first-child, .drift-table td:first-child {
+      min-inline-size: 120px;
+    }
+    .dep-name__category { display: none; }
+    .severity-badge { display: none; }
+    .col-summary { display: none; }
+  }
+
+  /* ── Scroll-driven row entrance ─────────────────── */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .drift-table tbody tr {
+        animation: row-enter linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 25%;
+      }
+      @keyframes row-enter {
+        from { opacity: 0; translate: 0 6px; }
+        to   { opacity: 1; translate: 0 0; }
+      }
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Utilities
+   ═══════════════════════════════════════════════════════ */
+@layer utilities {
+  .visually-hidden {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <header class="header">
+    <h1>Dependency Drift</h1>
+    <div class="controls">
+      <button class="theme-toggle" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+  </header>
+
+  <!-- Compare bar -->
+  <div class="compare-bar">
+    <span class="compare-bar__label">Compare</span>
+    <div class="compare-bar__select-group">
+      <span>From</span>
+      <select class="compare-select" id="compareFrom"></select>
+      <span class="compare-bar__arrow">&rarr;</span>
+      <span>To</span>
+      <select class="compare-select" id="compareTo"></select>
+    </div>
+    <button class="compare-bar__reset" id="compareReset" hidden>Show all releases</button>
+  </div>
+
+  <!-- Diff summary (shown in compare mode) -->
+  <div class="diff-summary" id="diffSummary" hidden>
+    <div class="diff-summary__heading" id="diffSummaryHeading"></div>
+    <div class="diff-summary__line" id="diffSummaryLine"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="search-wrapper">
+      <svg class="search-wrapper__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="search" class="search-input" id="searchInput" placeholder="Filter dependencies... ( / )" autocomplete="off" spellcheck="false">
+    </div>
+    <label class="toggle-label">
+      <input type="checkbox" class="toggle-checkbox" id="changedOnly">
+      Only show changed
+    </label>
+    <div class="sort-wrapper">
+      <span>Sort:</span>
+      <select class="sort-select" id="sortSelect">
+        <option value="impact">Impact</option>
+        <option value="name">Name</option>
+        <option value="staleness">Staleness</option>
+        <option value="category">Category</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span class="legend__item"><span class="legend__swatch legend__swatch--major"></span> Major</span>
+    <span class="legend__item"><span class="legend__swatch legend__swatch--minor"></span> Minor</span>
+    <span class="legend__item"><span class="legend__swatch legend__swatch--patch"></span> Patch</span>
+    <span class="legend__item"><span class="legend__swatch legend__swatch--added"></span> Added</span>
+    <span class="legend__item"><span class="legend__swatch legend__swatch--removed"></span> Removed</span>
+  </div>
+
+  <!-- Table -->
+  <div class="table-container">
+    <table class="drift-table" id="driftTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="summary" id="summary"></div>
+</div>
+
+<div class="kbd-hint"><kbd>t</kbd> theme &middot; <kbd>/</kbd> search &middot; <kbd>Esc</kbd> clear</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════════════════════
+var currentTheme = 'dark';
+function toggleTheme() {
+  currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.style.colorScheme = currentTheme;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════
+var DATA = /*__DATA__*/null/*__END__*/;
+var TAGS = DATA ? DATA.tags : [];
+var DEPS = DATA ? DATA.dependencies : [];
+
+// ═══════════════════════════════════════════════════════════
+// SEMVER UTILITIES
+// ═══════════════════════════════════════════════════════════
+function parseSemver(v) {
+  if (!v) return null;
+  var parts = v.split(".").map(Number);
+  return { major: parts[0] || 0, minor: parts[1] || 0, patch: parts[2] || 0 };
+}
+
+function semverSeverity(from, to) {
+  var a = parseSemver(from);
+  var b = parseSemver(to);
+  if (!a || !b) return null;
+  if (b.major !== a.major) return "major";
+  if (b.minor !== a.minor) return "minor";
+  if (b.patch !== a.patch) return "patch";
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// CELL CLASSIFICATION
+// ═══════════════════════════════════════════════════════════
+function classifyCell(versions, i) {
+  var cur = versions[i];
+  var prev = i > 0 ? versions[i - 1] : null;
+
+  if (cur === null && prev === null) return { type: "absent" };
+  if (cur === null && prev !== null) return { type: "removed", prev: prev };
+  if (cur !== null && (prev === null || i === 0)) return { type: "added" };
+  if (cur !== prev) {
+    var sev = semverSeverity(prev, cur);
+    return { type: "bumped", severity: sev || "patch", prev: prev };
+  }
+  return { type: "unchanged" };
+}
+
+// ═══════════════════════════════════════════════════════════
+// PER-DEP ANALYSIS
+// ═══════════════════════════════════════════════════════════
+function analyzeDep(dep) {
+  var cells = dep.versions.map(function(_, i) { return classifyCell(dep.versions, i); });
+
+  // Impact score: major=10, minor=3, patch=1, added=5, removed=2
+  var WEIGHTS = { major: 10, minor: 3, patch: 1 };
+  var impactScore = 0;
+  var totalChanges = 0;
+  var majors = 0, minors = 0, patches = 0, adds = 0, removes = 0;
+
+  cells.forEach(function(c, i) {
+    if (i === 0) return; // first tag doesn't count as a "change"
+    if (c.type === "bumped") {
+      totalChanges++;
+      impactScore += WEIGHTS[c.severity] || 1;
+      if (c.severity === "major") majors++;
+      else if (c.severity === "minor") minors++;
+      else patches++;
+    } else if (c.type === "added") {
+      totalChanges++; adds++; impactScore += 5;
+    } else if (c.type === "removed") {
+      totalChanges++; removes++; impactScore += 2;
+    }
+  });
+
+  // Staleness: consecutive trailing unchanged/absent releases
+  var staleSince = null;
+  var staleCount = 0;
+  for (var i = dep.versions.length - 1; i >= 1; i--) {
+    if (cells[i].type === "unchanged" || cells[i].type === "absent") {
+      staleCount++;
+    } else {
+      staleSince = i;
+      break;
+    }
+  }
+  if (staleSince === null) staleSince = 0;
+  var lastChangedTag = TAGS[staleSince];
+
+  return {
+    name: dep.name, category: dep.category || "", versions: dep.versions, repoUrl: dep.repoUrl,
+    cells: cells, impactScore: impactScore, totalChanges: totalChanges,
+    majors: majors, minors: minors, patches: patches, adds: adds, removes: removes,
+    staleCount: staleCount, lastChangedTag: lastChangedTag, lastChangedIndex: staleSince,
+    everChanged: totalChanges > 0
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// PER-TAG COLUMN SUMMARY
+// ═══════════════════════════════════════════════════════════
+function computeColumnSummaries(analyzed) {
+  return TAGS.map(function(_, ti) {
+    var s = { majors: 0, minors: 0, patches: 0, added: 0, removed: 0 };
+    if (ti === 0) return s; // first tag has no "previous"
+    analyzed.forEach(function(d) {
+      var c = d.cells[ti];
+      if (c.type === "bumped") {
+        if (c.severity === "major") s.majors++;
+        else if (c.severity === "minor") s.minors++;
+        else s.patches++;
+      } else if (c.type === "added") s.added++;
+      else if (c.type === "removed") s.removed++;
+    });
+    return s;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+var allAnalyzed = DEPS.map(analyzeDep);
+var colSummaries = computeColumnSummaries(allAnalyzed);
+var compareFrom = 0;
+var compareTo = TAGS.length - 1;
+var isCompareMode = false;
+
+// ═══════════════════════════════════════════════════════════
+// SORTING
+// ═══════════════════════════════════════════════════════════
+function sortDeps(list, mode) {
+  var sorted = list.slice();
+  switch (mode) {
+    case "impact":
+      sorted.sort(function(a, b) { return b.impactScore - a.impactScore || a.name.localeCompare(b.name); });
+      break;
+    case "name":
+      sorted.sort(function(a, b) { return a.name.localeCompare(b.name); });
+      break;
+    case "staleness":
+      sorted.sort(function(a, b) { return b.staleCount - a.staleCount || a.name.localeCompare(b.name); });
+      break;
+    case "category":
+      sorted.sort(function(a, b) { return (a.category || "").localeCompare(b.category || "") || b.impactScore - a.impactScore; });
+      break;
+  }
+  return sorted;
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════
+var linkIcon = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3L3 9"/><path d="M4 3h5v5"/></svg>';
+
+function changelogUrl(dep, version) {
+  if (!dep.repoUrl || !version) return null;
+  return dep.repoUrl + '/releases';
+}
+
+function renderColumnSummary(s) {
+  if (!s.majors && !s.minors && !s.patches && !s.added && !s.removed) return "";
+  var parts = [];
+  if (s.majors)  parts.push('<span class="col-summary__major">' + s.majors + 'M</span>');
+  if (s.minors)  parts.push('<span class="col-summary__minor">' + s.minors + 'm</span>');
+  if (s.patches) parts.push(s.patches + 'p');
+  if (s.added)   parts.push('<span class="col-summary__added">' + s.added + '+</span>');
+  if (s.removed) parts.push('<span class="col-summary__removed">' + s.removed + '\u2212</span>');
+  return parts.join(" ");
+}
+
+function render() {
+  var sortMode = document.getElementById("sortSelect").value;
+  var sorted = sortDeps(allAnalyzed, sortMode);
+
+  // Determine visible tag range
+  var fromIdx = isCompareMode ? compareFrom : 0;
+  var toIdx = isCompareMode ? compareTo : TAGS.length - 1;
+
+  // ── Header ──
+  var thead = document.getElementById("tableHead");
+  var headHtml = '<tr><th>Dependency</th>';
+  TAGS.forEach(function(tag, ti) {
+    var hidden = (ti < fromIdx || ti > toIdx) ? "col--hidden" : "";
+    var summary = renderColumnSummary(colSummaries[ti]);
+    headHtml += '<th class="' + hidden + '" data-col="' + ti + '">' + tag + (summary ? '<span class="col-summary">' + summary + '</span>' : '') + '</th>';
+  });
+  headHtml += '<th>Last changed</th></tr>';
+  thead.innerHTML = headHtml;
+
+  // ── Body ──
+  var tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+
+  var totalVisible = 0;
+  var totalChanges = 0;
+  var totalMajors = 0;
+
+  sorted.forEach(function(dep) {
+    var tr = document.createElement("tr");
+    tr.dataset.depName = dep.name.toLowerCase();
+    tr.dataset.category = dep.category || "";
+    tr.dataset.changed = dep.everChanged ? "true" : "false";
+    tr.dataset.impact = dep.impactScore;
+
+    // In compare mode, check if there's any change in the visible range
+    if (isCompareMode) {
+      var hasChangeInRange = false;
+      for (var i = Math.max(1, fromIdx); i <= toIdx; i++) {
+        var c = dep.cells[i];
+        if (c.type !== "unchanged" && c.type !== "absent") { hasChangeInRange = true; break; }
+      }
+      // Also check if first visible col is "added" (dep didn't exist before range)
+      if (fromIdx === 0 && dep.cells[0].type === "added") hasChangeInRange = true;
+      tr.dataset.changedInRange = hasChangeInRange ? "true" : "false";
+    } else {
+      tr.dataset.changedInRange = dep.everChanged ? "true" : "false";
+    }
+
+    // Dep name cell
+    var nameTd = document.createElement("td");
+    nameTd.classList.add("dep-name");
+    nameTd.innerHTML = dep.name + (dep.category ? '<span class="dep-name__category">' + dep.category + '</span>' : '');
+    tr.appendChild(nameTd);
+
+    // Version cells
+    dep.versions.forEach(function(version, ti) {
+      var c = dep.cells[ti];
+      var td = document.createElement("td");
+      td.dataset.col = ti;
+
+      if (ti < fromIdx || ti > toIdx) {
+        td.classList.add("col--hidden");
+      }
+
+      var cssClass = "version-cell";
+      var display = "";
+      var tooltipText = "";
+
+      switch (c.type) {
+        case "absent":
+          cssClass += " version-cell--absent";
+          display = "\u2014";
+          tooltipText = "Not present";
+          break;
+        case "unchanged":
+          cssClass += " version-cell--unchanged";
+          display = version;
+          tooltipText = version;
+          break;
+        case "added":
+          cssClass += " version-cell--added";
+          display = version;
+          tooltipText = ti === 0 ? "Initial: " + version : "Added: " + version;
+          totalChanges++;
+          break;
+        case "removed":
+          cssClass += " version-cell--removed";
+          display = "\u2715";
+          tooltipText = "Removed (was " + c.prev + ")";
+          totalChanges++;
+          break;
+        case "bumped":
+          cssClass += " version-cell--" + c.severity;
+          display = version;
+          tooltipText = c.prev + " \u2192 " + version + " (" + c.severity + ")";
+          totalChanges++;
+          if (c.severity === "major") totalMajors++;
+
+          // Severity badge for major/minor
+          if (c.severity === "major") {
+            display += '<span class="severity-badge severity-badge--major">major</span>';
+          } else if (c.severity === "minor") {
+            display += '<span class="severity-badge severity-badge--minor">minor</span>';
+          }
+          break;
+      }
+
+      // Changelog link for any change
+      if (c.type === "bumped" || c.type === "added") {
+        var url = changelogUrl(dep, version);
+        if (url) {
+          display += '<a href="' + url + '" target="_blank" rel="noopener" class="changelog-link" title="View releases" onclick="event.stopPropagation()">' + linkIcon + '</a>';
+        }
+      }
+
+      td.className = cssClass;
+      td.innerHTML = display + '<span class="cell-tooltip">' + tooltipText + '</span>';
+      tr.appendChild(td);
+    });
+
+    // Staleness cell
+    var staleTd = document.createElement("td");
+    var isFresh = dep.lastChangedIndex === TAGS.length - 1;
+    var isVeryStale = dep.staleCount >= Math.floor(TAGS.length * 0.6);
+    var staleClass = "staleness-cell";
+    if (isVeryStale && dep.staleCount > 0) staleClass += " staleness-cell--stale";
+    else if (isFresh) staleClass += " staleness-cell--fresh";
+    staleTd.className = staleClass;
+
+    if (dep.staleCount === 0 || isFresh) {
+      staleTd.innerHTML = '<span class="staleness-cell__tag">' + dep.lastChangedTag + '</span>';
+    } else if (dep.staleCount >= TAGS.length - 1 && !dep.everChanged) {
+      staleTd.innerHTML = '<span class="staleness-cell__tag">Never changed</span><span class="staleness-cell__count">' + TAGS.length + ' releases pinned</span>';
+    } else {
+      staleTd.innerHTML = '<span class="staleness-cell__tag">' + dep.lastChangedTag + '</span><span class="staleness-cell__count">' + dep.staleCount + ' release' + (dep.staleCount > 1 ? 's' : '') + ' ago</span>';
+    }
+    tr.appendChild(staleTd);
+
+    // Click to select
+    tr.addEventListener("click", function() { tr.classList.toggle("row--selected"); });
+    tbody.appendChild(tr);
+    totalVisible++;
+  });
+
+  // Summary
+  updateSummary(sorted.length, TAGS.length, totalChanges, totalMajors);
+
+  // Apply current filters
+  applyFilters();
+
+  // Diff summary panel
+  renderDiffSummary(sorted, fromIdx, toIdx);
+}
+
+function updateSummary(deps, releases, changes, majors) {
+  var el = document.getElementById("summary");
+  var html =
+    '<span class="summary__item"><span class="summary__count">' + deps + '</span> dependencies</span>' +
+    '<span class="summary__item"><span class="summary__count">' + releases + '</span> releases</span>' +
+    '<span class="summary__item"><span class="summary__count">' + changes + '</span> changes</span>';
+  if (majors > 0) {
+    html += '<span class="summary__item"><span class="summary__count" style="color:var(--color-danger-fg)">' + majors + '</span> major bumps</span>';
+  }
+  el.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════
+// DIFF SUMMARY PANEL
+// ═══════════════════════════════════════════════════════════
+function renderDiffSummary(sorted, fromIdx, toIdx) {
+  var panel = document.getElementById("diffSummary");
+  var heading = document.getElementById("diffSummaryHeading");
+  var line = document.getElementById("diffSummaryLine");
+
+  if (!isCompareMode) {
+    panel.hidden = true;
+    return;
+  }
+
+  var stats = { major: [], minor: [], patch: [], added: [], removed: [] };
+
+  sorted.forEach(function(dep) {
+    for (var i = Math.max(1, fromIdx); i <= toIdx; i++) {
+      var c = dep.cells[i];
+      if (c.type === "bumped") {
+        if (stats[c.severity].indexOf(dep.name) === -1) stats[c.severity].push(dep.name);
+      } else if (c.type === "added") {
+        if (stats.added.indexOf(dep.name) === -1) stats.added.push(dep.name);
+      } else if (c.type === "removed") {
+        if (stats.removed.indexOf(dep.name) === -1) stats.removed.push(dep.name);
+      }
+    }
+  });
+
+  var totalChanges = stats.major.length + stats.minor.length + stats.patch.length + stats.added.length + stats.removed.length;
+
+  if (totalChanges === 0) {
+    heading.textContent = TAGS[fromIdx] + ' \u2192 ' + TAGS[toIdx] + ': No changes';
+    line.innerHTML = "";
+    panel.hidden = false;
+    return;
+  }
+
+  heading.textContent = TAGS[fromIdx] + ' \u2192 ' + TAGS[toIdx];
+
+  var chips = "";
+  if (stats.major.length) {
+    chips += '<span class="diff-summary__chip diff-summary__chip--major">' + stats.major.length + ' major</span><span class="diff-summary__names">' + stats.major.join(", ") + '</span>';
+  }
+  if (stats.minor.length) {
+    chips += '<span class="diff-summary__chip diff-summary__chip--minor">' + stats.minor.length + ' minor</span><span class="diff-summary__names">' + stats.minor.join(", ") + '</span>';
+  }
+  if (stats.patch.length) {
+    chips += '<span class="diff-summary__chip diff-summary__chip--patch">' + stats.patch.length + ' patch</span><span class="diff-summary__names">' + stats.patch.join(", ") + '</span>';
+  }
+  if (stats.added.length) {
+    chips += '<span class="diff-summary__chip diff-summary__chip--added">' + stats.added.length + ' added</span><span class="diff-summary__names">' + stats.added.join(", ") + '</span>';
+  }
+  if (stats.removed.length) {
+    chips += '<span class="diff-summary__chip diff-summary__chip--removed">' + stats.removed.length + ' removed</span><span class="diff-summary__names">' + stats.removed.join(", ") + '</span>';
+  }
+
+  line.innerHTML = chips;
+  panel.hidden = false;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FILTERING
+// ═══════════════════════════════════════════════════════════
+function applyFilters() {
+  var searchTerm = document.getElementById("searchInput").value.toLowerCase().trim();
+  var changedOnly = document.getElementById("changedOnly").checked;
+  var rows = document.querySelectorAll("#tableBody tr");
+  var visibleCount = 0;
+
+  rows.forEach(function(row) {
+    if (row.id === "noResults") return;
+    var name = row.dataset.depName || "";
+    var cat = row.dataset.category || "";
+    var changedInRange = row.dataset.changedInRange === "true";
+    var matchesSearch = !searchTerm || name.indexOf(searchTerm) !== -1 || cat.indexOf(searchTerm) !== -1;
+    var matchesChanged = !changedOnly || changedInRange;
+    var visible = matchesSearch && matchesChanged;
+    row.classList.toggle("row--hidden", !visible);
+    if (visible) visibleCount++;
+  });
+
+  // No results
+  var noRow = document.getElementById("noResults");
+  if (visibleCount === 0) {
+    if (!noRow) {
+      noRow = document.createElement("tr");
+      noRow.id = "noResults";
+      noRow.classList.add("no-results");
+      noRow.innerHTML = '<td colspan="' + (TAGS.length + 2) + '">No dependencies match your filter</td>';
+      document.getElementById("tableBody").appendChild(noRow);
+    }
+    noRow.hidden = false;
+  } else if (noRow) {
+    noRow.hidden = true;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// COMPARE MODE
+// ═══════════════════════════════════════════════════════════
+function initCompareSelects() {
+  var fromEl = document.getElementById("compareFrom");
+  var toEl = document.getElementById("compareTo");
+
+  TAGS.forEach(function(tag, i) {
+    fromEl.add(new Option(tag, i));
+    toEl.add(new Option(tag, i));
+  });
+
+  fromEl.value = 0;
+  toEl.value = TAGS.length - 1;
+
+  var onCompareChange = function() {
+    var f = parseInt(fromEl.value);
+    var t = parseInt(toEl.value);
+
+    // Ensure from <= to
+    if (f > t) {
+      toEl.value = f;
+    }
+
+    compareFrom = parseInt(fromEl.value);
+    compareTo = parseInt(toEl.value);
+
+    var isFullRange = compareFrom === 0 && compareTo === TAGS.length - 1;
+    isCompareMode = !isFullRange;
+    document.getElementById("compareReset").hidden = !isCompareMode;
+
+    render();
+  };
+
+  fromEl.addEventListener("change", onCompareChange);
+  toEl.addEventListener("change", onCompareChange);
+
+  document.getElementById("compareReset").addEventListener("click", function() {
+    fromEl.value = 0;
+    toEl.value = TAGS.length - 1;
+    isCompareMode = false;
+    document.getElementById("compareReset").hidden = true;
+    render();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded", function() {
+  initCompareSelects();
+  render();
+
+  document.getElementById("searchInput").addEventListener("input", applyFilters);
+  document.getElementById("changedOnly").addEventListener("change", applyFilters);
+  document.getElementById("sortSelect").addEventListener("change", function() { render(); });
+
+  // Keyboard shortcuts
+  document.addEventListener("keydown", function(e) {
+    // Allow Escape from anywhere to clear search
+    if (e.key === "Escape") {
+      document.getElementById("searchInput").blur();
+      document.getElementById("searchInput").value = "";
+      applyFilters();
+      return;
+    }
+
+    // Skip shortcuts when focus is in an input
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") {
+      return;
+    }
+
+    if (e.key === "/") {
+      e.preventDefault();
+      document.getElementById("searchInput").focus();
+    }
+    if (e.key === "t") {
+      toggleTheme();
+    }
+  });
+});
+</script>
+</body>
+</html>

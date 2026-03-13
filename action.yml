@@ -1,0 +1,83 @@
+name: Dependency Drift
+description: Visualize how Gradle dependencies evolve across tagged releases
+branding:
+  icon: git-branch
+  color: orange
+
+inputs:
+  last:
+    description: Number of most recent semver tags to include (0 = all)
+    default: "10"
+  catalog:
+    description: Path to the version catalog file within the repository
+    default: "gradle/libs.versions.toml"
+  output:
+    description: Output HTML file path
+    default: "dep-drift.html"
+  version:
+    description: Tool version to download (e.g. v1.0.0, or latest)
+    default: "latest"
+  upload-to-release:
+    description: Upload the report as a release asset (only works on release triggers)
+    default: "true"
+
+outputs:
+  report-path:
+    description: Path to the generated HTML report
+    value: ${{ steps.run.outputs.report-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve version
+      id: version
+      shell: bash
+      run: |
+        if [ "$INPUT_VERSION" = "latest" ]; then
+          INPUT_VERSION=$(gh api repos/rnaudi/dependency-drift/releases/latest --jq .tag_name)
+        fi
+        echo "version=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+      env:
+        GH_TOKEN: ${{ github.token }}
+        INPUT_VERSION: ${{ inputs.version }}
+
+    - name: Cache binary
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: /tmp/dependency-drift/bin
+        key: dependency-drift-${{ steps.version.outputs.version }}
+
+    - name: Download binary
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p /tmp/dependency-drift/bin
+        curl -sfL "https://github.com/rnaudi/dependency-drift/releases/download/${{ steps.version.outputs.version }}/dependency-drift-linux-x86_64" \
+          -o /tmp/dependency-drift/bin/dependency-drift
+        chmod +x /tmp/dependency-drift/bin/dependency-drift
+
+    - name: Run dependency-drift
+      id: run
+      shell: bash
+      run: |
+        /tmp/dependency-drift/bin/dependency-drift \
+          "$GITHUB_WORKSPACE" \
+          --last "$INPUT_LAST" \
+          --catalog "$INPUT_CATALOG" \
+          --output "$INPUT_OUTPUT"
+        echo "report-path=$INPUT_OUTPUT" >> "$GITHUB_OUTPUT"
+      env:
+        INPUT_LAST: ${{ inputs.last }}
+        INPUT_CATALOG: ${{ inputs.catalog }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+
+    - name: Upload report to release
+      if: inputs.upload-to-release == 'true' && github.event_name == 'release'
+      shell: bash
+      run: |
+        gh release upload "$RELEASE_TAG" "$INPUT_OUTPUT" --clobber
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ github.event.release.tag_name }}
+        INPUT_OUTPUT: ${{ inputs.output }}
